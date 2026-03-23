@@ -37,8 +37,6 @@ class FormStates(StatesGroup):
     city = State()
     of_pages = State()
     of_stats = State()
-    content_18 = State()
-    taboo = State()
     toys_18 = State()
     phone_model = State()
     blogger_lamp = State()
@@ -58,8 +56,6 @@ FORM_FIELDS = [
     ("Місто проживання", "city"),
     ("Зареєстровані сторінки на OF", "of_pages"),
     ("Який актив/скільки фанів, якщо є сторінки OF", "of_stats"),
-    ("🔞 Контент 18+", "content_18"),
-    ("🔞 Табу", "taboo"),
     ("🔞 Іграшки 18+", "toys_18"),
     ("📸 Модель телефону", "phone_model"),
     ("📸 Блогерська лампа", "blogger_lamp"),
@@ -109,14 +105,98 @@ FAQ_TEXT = (
     "Так. Конфіденційність, контроль доступів і акуратна комунікація є базовою частиною нашої операційної моделі."
 )
 
+FORM_FLOW = [
+    (FormStates.name, "name", "Ім'я:", None),
+    (FormStates.age, "age", "Вік:", None),
+    (FormStates.citizenship, "citizenship", "Громадянство:", None),
+    (FormStates.city, "city", "Місто проживання:", None),
+    (FormStates.of_pages, "of_pages", "Зареєстровані сторінки на OF:", None),
+    (
+        FormStates.of_stats,
+        "of_stats",
+        "Який актив/скільки фанів, якщо є сторінки OF:",
+        None,
+    ),
+    (FormStates.toys_18, "toys_18", "🔞 Іграшки 18+:", None),
+    (FormStates.phone_model, "phone_model", "📸 Модель телефону:", None),
+    (
+        FormStates.blogger_lamp,
+        "blogger_lamp",
+        "📸 Блогерська лампа:",
+        [("✅ Так", "Так"), ("❌ Ні", "Ні")],
+    ),
+    (
+        FormStates.led_tapes,
+        "led_tapes",
+        "📸 LED-стрічки:",
+        [("✅ Так", "Так"), ("❌ Ні", "Ні")],
+    ),
+    (
+        FormStates.apartment,
+        "apartment",
+        "📸 Квартира:",
+        [("✨ Гарна", "гарна"), ("👌 Середня", "середня"), ("⚠️ Погана", "погана")],
+    ),
+    (
+        FormStates.hours_per_day,
+        "hours_per_day",
+        "❓ Скільки часу готова приділяти роботі на день?",
+        None,
+    ),
+    (
+        FormStates.tiktok_reels,
+        "tiktok_reels",
+        "❓ Чи будеш записувати TikTok та Reels?",
+        [("✅ Так", "Так"), ("❌ Ні", "Ні")],
+    ),
+    (
+        FormStates.salary_expectation,
+        "salary_expectation",
+        "❓ Яку зарплату очікуєш отримувати на місяць?",
+        None,
+    ),
+    (
+        FormStates.start_date,
+        "start_date",
+        "❓ Коли готова приступити до роботи?",
+        None,
+    ),
+]
+
+STATE_TO_STEP = {state.state: (state, key, prompt, options) for state, key, prompt, options in FORM_FLOW}
+STATE_ORDER = [state.state for state, _, _, _ in FORM_FLOW]
+STATE_TO_NEXT = {STATE_ORDER[i]: (STATE_ORDER[i + 1] if i + 1 < len(STATE_ORDER) else None) for i in range(len(STATE_ORDER))}
+STATE_NAME_TO_OBJ = {state.state: state for state, _, _, _ in FORM_FLOW}
+
 
 def main_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Анкета", callback_data="menu_form")
-    kb.button(text="FAQ", callback_data="menu_faq")
-    kb.button(text="Зворотній зв'язок", url="https://t.me/gimmemo_hr")
-    kb.button(text="Сайт", url="https://gimmemo.fun")
+    kb.button(text="📝 Анкета", callback_data="menu_form")
+    kb.button(text="❓ FAQ", callback_data="menu_faq")
+    kb.button(text="💬 Зворотний зв'язок", url="https://t.me/gimmemo_hr")
+    kb.button(text="🌐 Сайт", url="https://gimmemo.fun")
     kb.adjust(2, 1, 1)
+    return kb.as_markup()
+
+
+def faq_menu() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🏠 Головне меню", callback_data="menu_home")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def form_nav_keyboard(
+    state_key: str,
+    options: list[tuple[str, str]] | None = None,
+) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if options:
+        for label, value in options:
+            kb.button(text=label, callback_data=f"quick_answer:{state_key}:{value}")
+    kb.button(text="⬅️ Назад", callback_data="form_back")
+    kb.button(text="🏠 Головне меню", callback_data="form_home")
+    kb.adjust(*(1 for _ in (options or [])), 2)
     return kb.as_markup()
 
 
@@ -125,7 +205,9 @@ def capability_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
     for idx, item in enumerate(CAPABILITIES):
         mark = "✅" if str(idx) in selected else "❌"
         kb.button(text=f"{mark} {item}", callback_data=f"cap_toggle:{idx}")
-    kb.button(text="Готово", callback_data="cap_done")
+    kb.button(text="✅ Готово", callback_data="cap_done")
+    kb.button(text="⬅️ Назад", callback_data="form_back")
+    kb.button(text="🏠 Головне меню", callback_data="form_home")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -168,158 +250,123 @@ async def start_handler(message: Message, state: FSMContext) -> None:
 @dp.callback_query(F.data == "menu_faq")
 async def faq_handler(callback, state: FSMContext) -> None:
     await state.clear()
-    await callback.message.answer(FAQ_TEXT, reply_markup=main_menu())
+    await callback.message.answer(FAQ_TEXT, reply_markup=faq_menu())
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "menu_home")
+async def home_from_submenus(callback, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.answer("Оберіть потрібний розділ:", reply_markup=main_menu())
     await callback.answer()
 
 
 @dp.callback_query(F.data == "menu_form")
 async def form_start(callback, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(FormStates.name)
     await state.update_data(
+        _history=[],
         _user_meta={
             "id": callback.from_user.id,
             "username": callback.from_user.username or "-",
             "full_name": callback.from_user.full_name or "-",
         }
     )
-    await callback.message.answer("Ім'я:")
+    await ask_step(callback.message, state, FormStates.name)
     await callback.answer()
 
 
-async def _set_next_state(message: Message, state: FSMContext, key: str, next_state: State, prompt: str) -> None:
-    await state.update_data(**{key: message.text.strip()})
-    await state.set_state(next_state)
-    await message.answer(prompt)
+async def ask_step(message: Message, state: FSMContext, step_state: State) -> None:
+    _, key, prompt, options = STATE_TO_STEP[step_state.state]
+    await state.set_state(step_state)
+    await message.answer(prompt, reply_markup=form_nav_keyboard(key, options))
 
 
-@dp.message(FormStates.name)
-async def form_name(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "name", FormStates.age, "Вік:")
+async def go_next(message: Message, state: FSMContext, current_state_name: str) -> None:
+    data = await state.get_data()
+    history = data.get("_history", [])
+    history.append(current_state_name)
+    await state.update_data(_history=history)
+
+    next_state_name = STATE_TO_NEXT.get(current_state_name)
+    if not next_state_name:
+        await state.update_data(capabilities={})
+        await state.set_state(FormStates.capabilities)
+        await message.answer(
+            "Тепер для кожного пункту натисніть, щоб перемкнути між ✅ та ❌. "
+            "Коли завершите, натисніть «Готово».",
+            reply_markup=capability_keyboard(set()),
+        )
+        return
+
+    await ask_step(message, state, STATE_NAME_TO_OBJ[next_state_name])
 
 
-@dp.message(FormStates.age)
-async def form_age(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "age", FormStates.citizenship, "Громадянство:")
+@dp.message(StateFilter(*[STATE_NAME_TO_OBJ[name] for name in STATE_ORDER]))
+async def form_text_answers(message: Message, state: FSMContext) -> None:
+    current_state_name = await state.get_state()
+    if current_state_name is None:
+        return
+    _, key, _, options = STATE_TO_STEP[current_state_name]
+    # If quick options exist, user can still type a custom answer.
+    if options:
+        allowed = {value.lower() for _, value in options}
+        if message.text.strip().lower() in allowed:
+            await state.update_data(**{key: message.text.strip()})
+        else:
+            await state.update_data(**{key: message.text.strip()})
+    else:
+        await state.update_data(**{key: message.text.strip()})
+    await go_next(message, state, current_state_name)
 
 
-@dp.message(FormStates.citizenship)
-async def form_citizenship(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "citizenship", FormStates.city, "Місто проживання:")
+@dp.callback_query(F.data.startswith("quick_answer:"))
+async def form_quick_answers(callback, state: FSMContext) -> None:
+    current_state_name = await state.get_state()
+    if current_state_name is None or current_state_name not in STATE_TO_STEP:
+        await callback.answer()
+        return
+
+    _, key, _, _ = STATE_TO_STEP[current_state_name]
+    _, answer_key, value = callback.data.split(":", 2)
+    if key != answer_key:
+        await callback.answer("Застаріла кнопка", show_alert=False)
+        return
+
+    await state.update_data(**{key: value})
+    await callback.answer()
+    await go_next(callback.message, state, current_state_name)
 
 
-@dp.message(FormStates.city)
-async def form_city(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message, state, "city", FormStates.of_pages, "Зареєстровані сторінки на OF:"
-    )
+@dp.callback_query(F.data == "form_back")
+async def form_back(callback, state: FSMContext) -> None:
+    current_state_name = await state.get_state()
+    data = await state.get_data()
+    history = data.get("_history", [])
+
+    if current_state_name == FormStates.capabilities.state and history:
+        prev_state_name = history.pop()
+        await state.update_data(_history=history)
+        await ask_step(callback.message, state, STATE_NAME_TO_OBJ[prev_state_name])
+        await callback.answer()
+        return
+
+    if not history:
+        await callback.message.answer("Це перше питання анкети.", reply_markup=form_nav_keyboard("name"))
+        await callback.answer()
+        return
+
+    prev_state_name = history.pop()
+    await state.update_data(_history=history)
+    await ask_step(callback.message, state, STATE_NAME_TO_OBJ[prev_state_name])
+    await callback.answer()
 
 
-@dp.message(FormStates.of_pages)
-async def form_of_pages(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "of_pages",
-        FormStates.of_stats,
-        "Який актив/скільки фанів, якщо є сторінки OF:",
-    )
-
-
-@dp.message(FormStates.of_stats)
-async def form_of_stats(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "of_stats", FormStates.content_18, "🔞 Контент 18+:")
-
-
-@dp.message(FormStates.content_18)
-async def form_content_18(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "content_18", FormStates.taboo, "🔞 Табу:")
-
-
-@dp.message(FormStates.taboo)
-async def form_taboo(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "taboo", FormStates.toys_18, "🔞 Іграшки 18+:")
-
-
-@dp.message(FormStates.toys_18)
-async def form_toys(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "toys_18", FormStates.phone_model, "📸 Модель телефону:")
-
-
-@dp.message(FormStates.phone_model)
-async def form_phone(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "phone_model", FormStates.blogger_lamp, "📸 Блогерська лампа:")
-
-
-@dp.message(FormStates.blogger_lamp)
-async def form_lamp(message: Message, state: FSMContext) -> None:
-    await _set_next_state(message, state, "blogger_lamp", FormStates.led_tapes, "📸 LED-стрічки:")
-
-
-@dp.message(FormStates.led_tapes)
-async def form_led(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "led_tapes",
-        FormStates.apartment,
-        "📸 Квартира (гарна/середня/погана):",
-    )
-
-
-@dp.message(FormStates.apartment)
-async def form_apartment(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "apartment",
-        FormStates.hours_per_day,
-        "❓ Скільки часу готова приділяти роботі на день?",
-    )
-
-
-@dp.message(FormStates.hours_per_day)
-async def form_hours(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "hours_per_day",
-        FormStates.tiktok_reels,
-        "❓ Чи будеш записувати TikTok та Reels?",
-    )
-
-
-@dp.message(FormStates.tiktok_reels)
-async def form_tiktok(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "tiktok_reels",
-        FormStates.salary_expectation,
-        "❓ Яку зарплату очікуєш отримувати на місяць?",
-    )
-
-
-@dp.message(FormStates.salary_expectation)
-async def form_salary(message: Message, state: FSMContext) -> None:
-    await _set_next_state(
-        message,
-        state,
-        "salary_expectation",
-        FormStates.start_date,
-        "❓ Коли готова приступити до роботи?",
-    )
-
-
-@dp.message(FormStates.start_date)
-async def form_start_date(message: Message, state: FSMContext) -> None:
-    await state.update_data(start_date=message.text.strip(), capabilities={})
-    await state.set_state(FormStates.capabilities)
-    await message.answer(
-        "Тепер для кожного пункту натисніть, щоб перемкнути між ✅ та ❌. "
-        "Коли завершите, натисніть «Готово».",
-        reply_markup=capability_keyboard(set()),
-    )
+@dp.callback_query(F.data == "form_home")
+async def form_home(callback, state: FSMContext) -> None:
+    await state.clear()
+    await callback.message.answer("Повернулися у головне меню.", reply_markup=main_menu())
+    await callback.answer()
 
 
 @dp.callback_query(FormStates.capabilities, F.data.startswith("cap_toggle:"))
