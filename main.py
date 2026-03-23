@@ -169,6 +169,10 @@ STATE_TO_NEXT = {STATE_ORDER[i]: (STATE_ORDER[i + 1] if i + 1 < len(STATE_ORDER)
 STATE_NAME_TO_OBJ = {state.state: state for state, _, _, _ in FORM_FLOW}
 
 
+def normalize_answer(text: str) -> str:
+    return text.strip().lower().replace(".", "").replace("!", "").replace("?", "")
+
+
 def main_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="📝 Анкета", callback_data="menu_form")
@@ -308,15 +312,24 @@ async def form_text_answers(message: Message, state: FSMContext) -> None:
     if current_state_name is None:
         return
     _, key, _, options = STATE_TO_STEP[current_state_name]
-    # If quick options exist, user can still type a custom answer.
+    user_text = (message.text or "").strip()
+    if not user_text:
+        await message.answer("Введіть відповідь текстом або натисніть кнопку нижче.")
+        return
+
     if options:
-        allowed = {value.lower() for _, value in options}
-        if message.text.strip().lower() in allowed:
-            await state.update_data(**{key: message.text.strip()})
-        else:
-            await state.update_data(**{key: message.text.strip()})
+        allowed_map = {normalize_answer(value): value for _, value in options}
+        normalized = normalize_answer(user_text)
+        if normalized not in allowed_map:
+            allowed_hints = ", ".join(value for _, value in options)
+            await message.answer(
+                f"Будь ласка, оберіть один із варіантів: {allowed_hints}.",
+                reply_markup=form_nav_keyboard(key, options),
+            )
+            return
+        await state.update_data(**{key: allowed_map[normalized]})
     else:
-        await state.update_data(**{key: message.text.strip()})
+        await state.update_data(**{key: user_text})
     await go_next(message, state, current_state_name)
 
 
@@ -338,9 +351,18 @@ async def form_quick_answers(callback, state: FSMContext) -> None:
     await go_next(callback.message, state, current_state_name)
 
 
+@dp.message(FormStates.capabilities)
+async def capabilities_text_guard(message: Message) -> None:
+    await message.answer("На цьому кроці використовуйте кнопки ✅/❌ та «✅ Готово».")
+
+
 @dp.callback_query(F.data == "form_back")
 async def form_back(callback, state: FSMContext) -> None:
     current_state_name = await state.get_state()
+    if current_state_name is None:
+        await callback.answer("Анкета не активна", show_alert=False)
+        return
+
     data = await state.get_data()
     history = data.get("_history", [])
 
@@ -352,7 +374,11 @@ async def form_back(callback, state: FSMContext) -> None:
         return
 
     if not history:
-        await callback.message.answer("Це перше питання анкети.", reply_markup=form_nav_keyboard("name"))
+        if current_state_name in STATE_NAME_TO_OBJ:
+            await callback.message.answer("Це перше питання анкети.")
+            await ask_step(callback.message, state, STATE_NAME_TO_OBJ[current_state_name])
+        else:
+            await callback.message.answer("Це перше питання анкети.")
         await callback.answer()
         return
 
@@ -364,6 +390,10 @@ async def form_back(callback, state: FSMContext) -> None:
 
 @dp.callback_query(F.data == "form_home")
 async def form_home(callback, state: FSMContext) -> None:
+    current_state_name = await state.get_state()
+    if current_state_name is None:
+        await callback.answer("Анкета не активна", show_alert=False)
+        return
     await state.clear()
     await callback.message.answer("Повернулися у головне меню.", reply_markup=main_menu())
     await callback.answer()
@@ -371,7 +401,15 @@ async def form_home(callback, state: FSMContext) -> None:
 
 @dp.callback_query(FormStates.capabilities, F.data.startswith("cap_toggle:"))
 async def capability_toggle(callback, state: FSMContext) -> None:
-    idx = int(callback.data.split(":")[1])
+    try:
+        idx = int(callback.data.split(":")[1])
+    except (ValueError, IndexError):
+        await callback.answer("Некоректна кнопка", show_alert=False)
+        return
+    if idx < 0 or idx >= len(CAPABILITIES):
+        await callback.answer("Некоректна кнопка", show_alert=False)
+        return
+
     item = CAPABILITIES[idx]
     data = await state.get_data()
     cap = data.get("capabilities", {})
@@ -435,3 +473,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
