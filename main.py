@@ -21,7 +21,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
 BOT_TOKEN = "8735115748:AAEA2i6UIvF3ERxZHz_OSMT23kvmM9vGbyo"
-WEBHOOK_BASE_URL = os.getenv("telegram-bot-production-ce2b.up.railway.app", "").strip().rstrip("/")
+WEBHOOK_BASE_URL = "https://gimmemo.onrender.com"
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "gimmemo_webhook_secret")
 ADMIN_ID = 264354988
