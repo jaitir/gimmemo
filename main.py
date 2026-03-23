@@ -20,8 +20,8 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-WEBHOOK_BASE_URL = os.getenv("WEBHOOK_BASE_URL", "").strip().rstrip("/")
+BOT_TOKEN = os.getenv("8735115748:AAEA2i6UIvF3ERxZHz_OSMT23kvmM9vGbyo", "").strip()
+WEBHOOK_BASE_URL = os.getenv("telegram-bot-production-aa421.up.railway.app", "").strip().rstrip("/")
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "gimmemo_webhook_secret")
 ADMIN_ID = 264354988
