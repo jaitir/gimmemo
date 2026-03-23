@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
-from aiogram.types import InlineKeyboardMarkup, Message
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
 
@@ -68,20 +68,20 @@ FORM_FIELDS = [
 ]
 
 CAPABILITIES = [
-    "Відео з іграшками (дилдо/вібратор)",
+    "Відео з іграшками (ділдо/вібратор)",
     "Крупний план піхви",
     "Крупний план сідниць",
     "Крупний план грудей",
     "Крупний план стоп/ніг",
     "Мастурбація пальцями",
     "Мастурбація вібратором",
-    "Мастурбація дилдо",
+    "Мастурбація ділдо",
     "Еротична нижня білизна",
     "Колготки/панчохи",
     "Мінет з іграшкою",
     "Проникнення в анал",
     "Подвійне проникнення",
-    "Сквирт",
+    "Сквірт",
     "Парний контент",
 ]
 
@@ -306,11 +306,14 @@ async def go_next(message: Message, state: FSMContext, current_state_name: str) 
 
     next_state_name = STATE_TO_NEXT.get(current_state_name)
     if not next_state_name:
+        data = await state.get_data()
+        start_date_value = str(data.get("start_date", "")).strip()
         # На цьому кроці за замовчуванням вважаємо, що все підходить (✅),
         # а користувач знімає/вимикає непідходяще (перемикає на ❌).
         await state.update_data(capabilities={item: "✅" for item in CAPABILITIES})
         await state.set_state(FormStates.capabilities)
         await message.answer(
+            f"✅ Відповідь збережено: <b>{escape(start_date_value or '-')}</b>\n\n"
             "Тепер для кожного пункту натисніть, щоб перемкнути між ✅ та ❌. "
             "Коли завершите, натисніть «Готово».",
             reply_markup=capability_keyboard({str(i) for i in range(len(CAPABILITIES))}),
@@ -366,8 +369,14 @@ async def form_quick_answers(callback, state: FSMContext) -> None:
 
 
 @dp.message(FormStates.capabilities)
-async def capabilities_text_guard(message: Message) -> None:
-    await message.answer("На цьому кроці використовуйте кнопки ✅/❌ та «✅ Готово».")
+async def capabilities_text_guard(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    cap = data.get("capabilities", {})
+    selected = {str(i) for i, item in enumerate(CAPABILITIES) if cap.get(item, "✅") == "✅"}
+    await message.answer(
+        "На цьому кроці використовуйте кнопки ✅/❌ та «✅ Готово».",
+        reply_markup=capability_keyboard(selected),
+    )
 
 
 @dp.callback_query(F.data == "form_back")
@@ -487,4 +496,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
