@@ -205,15 +205,27 @@ def form_nav_keyboard(
 
 
 def capability_keyboard(selected: set[str]) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
+    rows: list[list[InlineKeyboardButton]] = []
     for idx, item in enumerate(CAPABILITIES):
         mark = "✅" if str(idx) in selected else "❌"
-        kb.button(text=f"{mark} {item}", callback_data=f"cap_toggle:{idx}")
-    kb.button(text="✅ Готово", callback_data="cap_done")
-    kb.button(text="⬅️ Назад", callback_data="form_back")
-    kb.button(text="🏠 Головне меню", callback_data="form_home")
-    kb.adjust(1)
-    return kb.as_markup()
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{mark} {item}",
+                    callback_data=f"cap_toggle:{idx}",
+                )
+            ]
+        )
+
+    rows.append([InlineKeyboardButton(text="✅ Готово", callback_data="cap_done")])
+    # Нижняя строка: "Назад" и "Головне меню" в одной линии
+    rows.append(
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="form_back"),
+            InlineKeyboardButton(text="🏠 Головне меню", callback_data="form_home"),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def build_form_message(data: dict) -> str:
@@ -294,12 +306,14 @@ async def go_next(message: Message, state: FSMContext, current_state_name: str) 
 
     next_state_name = STATE_TO_NEXT.get(current_state_name)
     if not next_state_name:
-        await state.update_data(capabilities={})
+        # На цьому кроці за замовчуванням вважаємо, що все підходить (✅),
+        # а користувач знімає/вимикає непідходяще (перемикає на ❌).
+        await state.update_data(capabilities={item: "✅" for item in CAPABILITIES})
         await state.set_state(FormStates.capabilities)
         await message.answer(
             "Тепер для кожного пункту натисніть, щоб перемкнути між ✅ та ❌. "
             "Коли завершите, натисніть «Готово».",
-            reply_markup=capability_keyboard(set()),
+            reply_markup=capability_keyboard({str(i) for i in range(len(CAPABILITIES))}),
         )
         return
 
